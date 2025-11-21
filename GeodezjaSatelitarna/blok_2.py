@@ -1,50 +1,6 @@
 import numpy as np
 
-# STAŁE #
-C = 299792458  # prędkość światła [m/s]
-
-
-class Satelita:
-    def __init__(self, name, t, delta_t, delta_t_s, P, X):
-        self.name = name
-        self.t = t
-        self.delta_t = delta_t
-        self.delta_t_s = delta_t_s
-        self.P = P
-        self.X = X
-
-    @staticmethod
-    def wspolrzedne_transmisja(t, delta_t, delta_t_s, P, name, X):
-        """
-        :param delta_t: Różnica czasu między obserwacjami środkową a skrajnymi (łącznie 3) w minutach
-        :param delta_t_s: Poprawka zegara dla satelity z pliku SP3 w mikrosekundach
-        (zakłada się, że podana jest prawidłowa poprawka dla przyjętego t)
-        :param t: Czas początkowy, np. lokalny albo jako czas GPS
-        :param P: Pseudoodległość (obserwacja w danym momencie z pliku OBS)
-        :param name: Nazwa satelity (informacyjnie)
-        :param X: Współrzędne satelity z pliku SP3 dla 3 epok (typ np.array)
-        :return: Współrzędne przybliżone satelity w epoce transmisji
-        """
-        X1, X2, X3 = X
-        delta_t *= 60
-        delta_t_s /= 1e6  # poprawka zegara na czasu t z SP3 (w mikrosekundach)
-
-        X_dot_S = (X3 - X1) / (2 * delta_t) * 1e3
-
-        t_tr = t - (P + C * delta_t_s) / C  # epoka transmisji sygnału
-        print(t_tr)
-
-        X_S_t_tr = X2 + X_dot_S * (t_tr - t)
-        print(name, X_S_t_tr)
-        return X_S_t_tr
-
-    @staticmethod
-    def odleglosc_geometryczna(x_r, x_s):
-        xr, yr, zr = x_r
-        xs, ys, zs = x_s
-        return np.sqrt((xs - xr) ** 2 + (ys - yr) ** 2 + (zs - zr) ** 2)
-
-
+# DANE #
 satelity = {
     "G05": {
         't': 11700,
@@ -114,26 +70,94 @@ satelity = {
     }
 }
 
+# STAŁE #
+C = 299792458  # prędkość światła [m/s]
 
-G05 = Satelita("G05", **satelity["G05"])
-X_G05 = G05.wspolrzedne_transmisja(G05.t, G05.delta_t, G05.delta_t_s, G05.P, G05.name, G05.X)
-G07 = Satelita("G07", **satelity["G07"])
-X_G07 = G05.wspolrzedne_transmisja(G07.t, G07.delta_t, G07.delta_t_s, G07.P, G07.name, G07.X)
-G09 = Satelita("G09", **satelity["G09"])
-X_G09 = G05.wspolrzedne_transmisja(G09.t, G09.delta_t, G09.delta_t_s, G09.P, G09.name, G09.X)
-G14 = Satelita("G14", **satelity["G14"])
-X_G14 = G05.wspolrzedne_transmisja(G14.t, G14.delta_t, G14.delta_t_s, G14.P, G14.name, G14.X)
-G15 = Satelita("G15", **satelity["G15"])
-X_G15 = G05.wspolrzedne_transmisja(G15.t, G15.delta_t, G15.delta_t_s, G15.P, G15.name, G15.X)
-G30 = Satelita("G30", **satelity["G30"])
-X_G30 = G05.wspolrzedne_transmisja(G30.t, G30.delta_t, G30.delta_t_s, G30.P, G30.name, G30.X)
 
-# Wedle założenia
-x_r = [0, 0, 0]
-dist_G05 = G05.odleglosc_geometryczna(x_r, X_G05)
-dist_G07 = G07.odleglosc_geometryczna(x_r, X_G07)
-dist_G09 = G09.odleglosc_geometryczna(x_r, X_G09)
-dist_G14 = G14.odleglosc_geometryczna(x_r, X_G14)
-dist_G15 = G15.odleglosc_geometryczna(x_r, X_G15)
-dist_G30 = G30.odleglosc_geometryczna(x_r, X_G30)
-print(dist_G05, dist_G07, dist_G09, dist_G14, dist_G15, dist_G30)
+class Satellite:
+    def __init__(self, name, t, delta_t, delta_t_s, P, X):
+        self.name = name
+        self.t = t
+        self.delta_t = delta_t
+        self.delta_t_s = delta_t_s
+        self.P = P
+        self.X = X
+        
+    def __transmission__(self, X_transmission):
+        self.X_transmission = X_transmission
+
+    def transmission_coords(self, t, delta_t, delta_t_s, P, name, X):
+        """
+        :param delta_t: Różnica czasu między obserwacjami środkową a skrajnymi (łącznie 3) w minutach
+        :param delta_t_s: Poprawka zegara dla satelity z pliku SP3 w mikrosekundach
+        (zakłada się, że podana jest prawidłowa poprawka dla przyjętego t)
+        :param t: Czas początkowy, np. lokalny albo jako czas GPS
+        :param P: Pseudoodległość (obserwacja w danym momencie z pliku OBS)
+        :param name: Nazwa satelity (informacyjnie)
+        :param X: Współrzędne satelity z pliku SP3 dla 3 epok (typ np.array)
+        :return: Współrzędne przybliżone satelity w epoce transmisji
+        """
+        X1, X2, X3 = X * 1e3
+        delta_t *= 60
+        delta_t_s /= 1e6
+
+        X_dot_S = (X3 - X1) / (2 * delta_t)
+
+        t_tr = t - (P + C * delta_t_s) / C  # epoka transmisji sygnału
+
+        X_S_t_tr = X2 + X_dot_S * (t_tr - t)
+        # print(name, X)
+        return X_S_t_tr
+
+    def odleglosc_geometryczna(self, x_r, x_s):
+        return np.linalg.norm(x_s - x_r)
+
+
+class Receiver:
+    def __init__(self, initial_coords, cdt_r=0):
+        self.X = np.array(initial_coords, dtype=np.float64)
+        self.cdt_r = cdt_r # poprawka zegara odbiornika [m]
+
+    def receiver_coords(self, satellites: dict, P):
+        X_r = self.X
+
+        L = []
+        A = []
+
+        for name, sat in satellites.items():
+            X_s = sat.X_transmission
+            rho = sat.odleglosc_geometryczna(X_r, X_s)
+            L += [sat.P + C * sat.delta_t_s / 1e6 - rho]
+            A += [-(X_s[0] - X_r[0]) / rho]
+            A += [-(X_s[1] - X_r[1]) / rho]
+            A += [-(X_s[2] - X_r[2]) / rho]
+            A += [1]
+        L = np.array([L]).reshape(len(satellites), 1)
+        A = np.array([A]).reshape(len(satellites), 4)
+        
+        dX = mnk(A, L, P)
+        dx, dy, dz, d_cdt_r = dX.flatten()
+        
+        self.X[0] += dx
+        self.X[1] += dy
+        self.X[2] += dz
+        self.cdt_r += d_cdt_r
+        
+        return max(dx, dy, dz)
+
+
+def mnk(A: np.ndarray, L: np.ndarray, P: np.ndarray):
+    return np.linalg.inv(A.T @ P @ A) @ A.T @ L
+
+
+sats = {}
+for name, data in satelity.items():
+    sats[name] = Satellite(name, **data)
+    sats[name].X_transmission = sats[name].transmission_coords(**data, name=name)
+
+Receiver = Receiver(initial_coords=([0, 0, 0]))  # założenie
+dist_diff = 2
+
+while dist_diff > 1:
+    P = np.diag([1] * 6)
+    dist_diff = Receiver.receiver_coords(sats, P)
