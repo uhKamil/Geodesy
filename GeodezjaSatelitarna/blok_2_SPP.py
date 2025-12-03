@@ -118,7 +118,7 @@ class Receiver:
         self.X = np.array(initial_coords, dtype=np.float64)
         self.cdt_r = cdt_r # poprawka zegara odbiornika [m]
 
-    def receiver_coords(self, satellites: dict, P):
+    def receiver_coords(self, satellites: dict, P, i):
         X_r = self.X
 
         L = []
@@ -132,18 +132,27 @@ class Receiver:
             A += [-(X_s[1] - X_r[1]) / rho]
             A += [-(X_s[2] - X_r[2]) / rho]
             A += [1]
+            if i == 1:
+                print(name, f"{rho:.3f}")
+
         L = np.array([L]).reshape(len(satellites), 1)
         A = np.array([A]).reshape(len(satellites), 4)
-        
+
+        if i == 1:
+            for i in range(len(L)):
+                print(f"{L[i][0]:.4f}")
+
         dX = mnk(A, L, P)
         dx, dy, dz, d_cdt_r = dX.flatten()
+
+        if i > 1:
+            print(f"{dx:.3f}, {dy:.3f}, {dz:.3f}, {d_cdt_r:.3f}")
         
         self.X[0] += dx
         self.X[1] += dy
         self.X[2] += dz
         self.cdt_r += d_cdt_r
-        
-        return max(dx, dy, dz)
+        return max(abs(dx), abs(dy), abs(dz)), A
 
 
 def mnk(A: np.ndarray, L: np.ndarray, P: np.ndarray):
@@ -154,10 +163,23 @@ sats = {}
 for name, data in satelity.items():
     sats[name] = Satellite(name, **data)
     sats[name].X_transmission = sats[name].transmission_coords(**data, name=name)
+    print(name, f"{sats[name].X_transmission[0]:.3f}, {sats[name].X_transmission[1]:.3f}, {sats[name].X_transmission[2]:.3f}")
 
 Receiver = Receiver(initial_coords=([0, 0, 0]))  # założenie
-dist_diff = 2
+dist_diff = 2  # zmienna do inicjalizacji pętli i kontroli przyrostów współrzędnych
+i = 1 # do pliku txt (która iteracja)
 
 while dist_diff > 1:
     P = np.diag([1] * 6)
-    dist_diff = Receiver.receiver_coords(sats, P)
+    dist_diff, A = Receiver.receiver_coords(sats, P, i)
+    i += 1
+
+# Finalne współrzędne odbiornika
+for c in Receiver.X:
+    print(f"{c:.3f}")
+
+# Różnica między współrzędnymi referencyjnymi
+X_ref = np.array([3835044.3194, 1179902.7961, 4941503.7548])
+
+for i in range(len(X_ref)):
+    print(f"{X_ref[i]-Receiver.X[i]:.3f}")
